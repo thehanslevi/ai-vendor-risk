@@ -27,41 +27,62 @@ AIRTABLE_TABLE_NAME = "Vendors"
 
 
 RUBRIC = """\
-Score each dimension on a 1–5 integer scale, where:
-  1 = serious concern
-  2 = below expectations
-  3 = adequate
-  4 = strong
-  5 = best-in-class
+You are assessing an AI vendor against a seven-dimension risk rubric. Score each dimension from 1 to 5 using the anchored descriptions below. Use the FULL range: 1 and 5 are reachable scores, not theoretical extremes. If your scores across the seven dimensions are all clustering at 3, treat that as a signal to look harder and differentiate. Different vendors should produce genuinely different scores.
 
-Dimensions:
+EVIDENCE HANDLING: Score based on what the vendor context states. Where information is absent, do not assume the best or the worst. Absence of public documentation is itself a moderate risk signal (it limits assurance), but it is not equivalent to a confirmed failure. Distinguish "verified absent" from "not disclosed" in your reasoning.
 
-1. Data Handling & Privacy
-   Data lineage documentation; whether the vendor trains on customer inputs;
-   retention and deletion terms; PII handling and redaction controls.
+DIMENSION 1 - Data Handling & Privacy
+5: No training on customer data, contractually guaranteed; documented data lineage; granular retention/deletion controls; automated PII handling.
+4: No training on customer data by default; clear retention terms; some PII controls.
+3: Stated no-training posture but limited detail; basic retention controls; PII handling unclear.
+2: Trains on customer data by default with opt-out, OR significant ambiguity in data practices.
+1: Trains on customer data with no clear opt-out, OR documented misuse or misleading data claims.
 
-2. Security Posture
-   SOC 2 Type II; ISO 27001; breach history; access controls;
-   AI-specific security such as prompt injection and data exfiltration via outputs.
+DIMENSION 2 - Security Posture
+5: SOC 2 Type II AND ISO 27001, current; documented AI-specific security (prompt injection, output exfiltration); independent red-team testing.
+4: SOC 2 Type II and/or ISO 27001 current; strong access controls; some AI-specific security.
+3: SOC 2 Type II only, or certifications stated but unconfirmed; standard controls; no AI-specific security documented.
+2: Security claims without independent certification, OR certified but with documented security incidents.
+1: No verifiable security certification AND documented breaches or critical unresolved vulnerabilities.
 
-3. Model Transparency & Explainability
-   Model or system card availability; documented limitations and error modes;
-   red-team or adversarial evaluation; disaggregated performance results.
+DIMENSION 3 - Model Transparency & Explainability
+5: Public model/system card; documented limitations and error modes; published red-team/adversarial evaluation; disaggregated performance results.
+4: Model/system card available; some documented limitations; partial evaluation disclosure.
+3: Limited public model documentation; vendor describes capabilities but not limitations or evaluation.
+2: No model card; no documented limitations or evaluation results.
+1: No transparency whatsoever; vendor actively opaque about model behavior.
 
-4. Bias, Fairness & Harm
-   Documented bias testing; decision logs; contestability of decisions;
-   identification of affected populations.
+DIMENSION 4 - Bias, Fairness & Harm
+5: Documented bias testing with disaggregated results; clear contestability mechanism; identified affected populations; harm-reporting pathway.
+4: Some documented bias testing or fairness evaluation; a contestability or reporting pathway exists.
+3: Bias acknowledged as a consideration but no documented testing or disaggregated results.
+2: No bias documentation; the use case carries known fairness risks (e.g., demographic-sensitive outputs).
+1: No bias consideration AND the tool enables a high-harm capability (e.g., synthetic likeness, autonomous decisions affecting people).
 
-5. Vendor Stability & Lock-in
-   Company maturity; funding; data portability; exit terms.
+DIMENSION 5 - Vendor Stability & Lock-in
+5: Mature, well-capitalized vendor; full data portability; clear exit terms; minimal lock-in.
+4: Established vendor; reasonable portability; standard exit terms.
+3: Viable vendor but some concentration risk; partial data portability.
+2: Early-stage or thinly documented vendor; limited portability; meaningful lock-in.
+1: Unstable vendor outlook OR no realistic data export / exit path. (For self-hosted/open deployments, score stability on the deploying organization's own capacity to maintain the system.)
 
-6. Regulatory & Compliance Alignment
-   EU AI Act posture; NIST AI RMF alignment; ISO 42001 status;
-   sector-specific rules.
+DIMENSION 6 - Regulatory & Compliance Alignment
+5: ISO 42001 certified; explicit EU AI Act and NIST AI RMF posture; sector-specific compliance (HIPAA, etc.) where relevant.
+4: ISO 42001 certified OR strong stated alignment with EU AI Act / NIST AI RMF.
+3: General compliance (GDPR/CCPA) but no AI-specific regulatory posture (no ISO 42001, no EU AI Act statement).
+2: Minimal or generic compliance documentation; no AI-specific framework alignment.
+1: No demonstrable regulatory posture; compliance gaps for the intended use.
 
-7. Agentic Autonomy & Oversight
-   Degree of autonomous action the tool takes; human-in-the-loop controls;
-   identity and authorization for agent actions; monitoring and logging of agent behavior.
+DIMENSION 7 - Agentic Autonomy & Oversight
+5: Tool is non-agentic OR fully autonomous with strong human-in-the-loop controls, scoped authorization, and complete action logging.
+4: Some autonomous action with configurable oversight and logging available.
+3: Moderate autonomy (acts without per-action approval) but bounded blast radius; basic oversight.
+2: High autonomy taking downstream actions; oversight depends entirely on customer configuration; thin logging.
+1: High autonomy with no built-in oversight, authorization scoping, or action logging.
+
+SCORING OUTPUT:
+Compute overall_score as the average of the seven dimension scores, to one decimal place.
+Map to risk_tier: 4.0 and above = "Low Risk"; 2.5 to 3.9 = "Moderate Risk"; below 2.5 = "High Risk".
 """
 
 
