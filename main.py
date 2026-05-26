@@ -2,15 +2,28 @@ import json
 import os
 import sys
 import textwrap
+from datetime import date
 
 import anthropic
 from dotenv import load_dotenv
+from pyairtable import Api
+from pyairtable.formulas import match
 
 load_dotenv(override=True)
 
 ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY")
 if not ANTHROPIC_API_KEY:
     raise RuntimeError("ANTHROPIC_API_KEY is not set in .env")
+
+AIRTABLE_TOKEN = os.environ.get("AIRTABLE_TOKEN")
+if not AIRTABLE_TOKEN:
+    raise RuntimeError("AIRTABLE_TOKEN is not set in .env")
+
+AIRTABLE_BASE_ID = os.environ.get("AIRTABLE_BASE_ID")
+if not AIRTABLE_BASE_ID:
+    raise RuntimeError("AIRTABLE_BASE_ID is not set in .env")
+
+AIRTABLE_TABLE_NAME = "Vendors"
 
 
 RUBRIC = """\
@@ -114,26 +127,11 @@ MAX_TOKENS = 2000
 def score_vendor(vendor: dict) -> str:
     prompt = build_prompt(vendor)
     client = anthropic.Anthropic()
-
-    try:
-        response = client.messages.create(
-            model=MODEL,
-            max_tokens=MAX_TOKENS,
-            messages=[{"role": "user", "content": prompt}],
-        )
-    except anthropic.AuthenticationError:
-        print("ERROR: Anthropic authentication failed. Check ANTHROPIC_API_KEY in .env.", file=sys.stderr)
-        sys.exit(1)
-    except anthropic.APIConnectionError as e:
-        print(f"ERROR: Could not reach the Anthropic API (network issue): {e}", file=sys.stderr)
-        sys.exit(1)
-    except anthropic.RateLimitError:
-        print("ERROR: Anthropic rate limit exceeded. Wait a moment and try again.", file=sys.stderr)
-        sys.exit(1)
-    except anthropic.APIError as e:
-        print(f"ERROR: Anthropic API error: {e}", file=sys.stderr)
-        sys.exit(1)
-
+    response = client.messages.create(
+        model=MODEL,
+        max_tokens=MAX_TOKENS,
+        messages=[{"role": "user", "content": prompt}],
+    )
     return response.content[0].text
 
 
@@ -146,14 +144,7 @@ def parse_response(raw: str) -> dict:
         text = text.rsplit("```", 1)[0]
     text = text.strip()
 
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError as e:
-        print(f"ERROR: Could not parse JSON from model response: {e}", file=sys.stderr)
-        print("--- raw response ---", file=sys.stderr)
-        print(raw, file=sys.stderr)
-        print("--- end raw response ---", file=sys.stderr)
-        sys.exit(1)
+    return json.loads(text)
 
 
 def format_report(result: dict, vendor: dict) -> str:
@@ -205,7 +196,77 @@ def format_report(result: dict, vendor: dict) -> str:
     return "\n".join(lines)
 
 
+def get_vendors_table():
+    api = Api(AIRTABLE_TOKEN)
+    return api.table(AIRTABLE_BASE_ID, AIRTABLE_TABLE_NAME)
+
+
+def record_to_vendor(record: dict) -> dict:
+    fields = record.get("fields", {})
+    return {
+        "vendor_name":    fields.get("Vendor Name", ""),
+        "tool":           fields.get("Tool / Product", ""),
+        "description":    fields.get("Description", ""),
+        "vendor_context": fields.get("Vendor Context", ""),
+    }
+
+
+def format_dimension_scores(dimensions: list) -> str:
+    blocks = []
+    for dim in dimensions:
+        blocks.append(f"[{dim['score']}/5] {dim['name']}\n  {dim['reasoning']}")
+    return "\n\n".join(blocks)
+
+
+def write_result_to_airtable(table, record_id: str, result: dict) -> None:
+    fields = {
+        "Status":              "Scored",
+        "Overall Score":       result["overall_score"],
+        "Risk Tier":           result["risk_tier"],
+        "Recommended Action":  result["recommended_action"],
+        "Assessment Summary":  result["summary"],
+        "Dimension Scores":    format_dimension_scores(result["dimensions"]),
+        "Last Scored":         date.today().isoformat(),
+    }
+    table.update(record_id, fields)
+
+
+def mark_error(table, record_id: str) -> None:
+    try:
+        table.update(record_id, {"Status": "Error"})
+    except Exception as e:
+        print(f"     (could not mark row as Error in Airtable: {e})", file=sys.stderr)
+
+
 if __name__ == "__main__":
-    raw = score_vendor(VENDOR)
-    result = parse_response(raw)
-    print(format_report(result, VENDOR))
+    table = get_vendors_table()
+    pending = table.all(formula=match({"Status": "Needs Review"}))
+    print(f"Found {len(pending)} record(s) with Status = 'Needs Review'.")
+
+    if not pending:
+        sys.exit(0)
+
+    successes = 0
+    failures = 0
+
+    for i, record in enumerate(pending, start=1):
+        vendor = record_to_vendor(record)
+        label = f"{vendor['vendor_name']} / {vendor['tool']}"
+        print(f"[{i}/{len(pending)}] {label} ... ", end="", flush=True)
+
+        try:
+            raw = score_vendor(vendor)
+            result = parse_response(raw)
+            write_result_to_airtable(table, record["id"], result)
+            print(f"[ok] {result['overall_score']} -> {result['risk_tier']}")
+            successes += 1
+        except anthropic.AuthenticationError:
+            print("[fail] authentication error -- aborting loop")
+            print("Check ANTHROPIC_API_KEY in .env. Remaining records left untouched.", file=sys.stderr)
+            sys.exit(1)
+        except Exception as e:
+            print(f"[fail] {type(e).__name__}: {e}")
+            mark_error(table, record["id"])
+            failures += 1
+
+    print(f"\nDone. {successes} scored, {failures} marked Error.")
