@@ -1,5 +1,7 @@
 # AI Vendor Risk Triage
 
+Built by Hannah Levinson. More at hrlevinson.com
+
 A Python tool that scores AI vendors against a seven-dimension governance rubric using the Anthropic API, with Airtable as the system of record.
 
 ## Overview
