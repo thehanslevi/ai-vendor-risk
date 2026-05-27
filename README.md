@@ -1,4 +1,4 @@
-# AI Vendor Risk Triage
+# AI Vendor Risk Assessment
 
 Built by Hannah Levinson. More at hrlevinson.com
 
