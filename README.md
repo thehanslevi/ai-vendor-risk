@@ -1,6 +1,6 @@
 # AI Vendor Risk Assessment
 
-Built by Hannah Levinson. More at hrlevinson.com
+Built by Hannah Levinson • more at hrlevinson.com
 
 A Python tool that scores AI vendors against a seven-dimension governance rubric using the Anthropic API, with Airtable as the system of record.
 
